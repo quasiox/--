@@ -537,6 +537,14 @@ class StudyCafe:
                 sys.exit(1)
             self.sessions.append(s)
         
+        for s in reversed(self.sessions):
+            if s.is_shutdown_record():
+                # 저장되었던 초(seconds) 데이터를 다시 timedelta로 변환
+                self.time_offset = timedelta(seconds=s.usage_min)
+                break
+
+        print(f"... 데이터 로드 완료. (현재 적용된 시간 오프셋: {self.time_offset})")
+
         self.last_shutdown = None
         for s in reversed(self.sessions):
             if s.is_shutdown_record() and s.exit_time is not None:
@@ -612,7 +620,7 @@ class StudyCafe:
             seat_id    = SHUTDOWN_SEAT_ID,
             enter_time = now,
             exit_time  = now, # 💡 이 시각이 다음번 실행 시 기준점이 됨
-            usage_min  = 0,
+            usage_min  = int(self.time_offset.total_seconds()),
         )
         self.sessions.append(shutdown_session)
         self._save_users()
@@ -1297,7 +1305,6 @@ class StudyCafe:
                 elapsed = self._calc_deduction(user, ticket, now)
                 return max(0, user.remain - elapsed + user.away_time)
             return user.remain + user.away_time
-            return user.remain
 
         elif ticket.type == 3:  # 종일권
             return user.remain
@@ -2854,8 +2861,6 @@ class StudyCafe:
             raw_cmd = tokens[0].lower()
             cmd = self._resolve_cmd(raw_cmd)
             args = tokens[1:]
-
-            avail = self._available_cmds()
 
             # 유효한 명령어인지 확인
             all_cmds = self.CMDS_ALWAYS | self.CMDS_LOGGED_OUT | self.CMDS_LOGGED_IN
