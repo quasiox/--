@@ -738,6 +738,12 @@ class StudyCafe:
                     and r.is_waiting()):
                 r.status = 2
 
+                if r.is_extension():
+                    for e in self.userticket_entries:
+                        if e.userticket_id == r.userticket_id:
+                            e.is_reserved = False
+                            break
+
         self.save_all()
         print(f"... [예약] {user.id}님이 {seat_id}번 좌석에 자동 입장하였습니다.")
 
@@ -1175,6 +1181,9 @@ class StudyCafe:
         """예약 릴레이션 기본 무결성 검사"""
         user_ids   = {u.id for u in self.users}
         seen_items = set()
+        
+        # 추가: 대기 이용권(UserTicketRelation)에 있는 유효한 userticket_id 목록 수집
+        valid_userticket_ids = {e.userticket_id for e in self.userticket_entries}
 
         for i, r in enumerate(self.reservations, 1):
             line = r.to_line()
@@ -1203,10 +1212,13 @@ class StudyCafe:
                 self._integrity_exit("Reservation", i,
                     f"seat_id 범위 오류 (0~{self.total_seats}): {r.seat_id}", line)
 
-            # userticket_id 음수 불가
+            # userticket_id 음수 불가 및 참조 무결성 검사
             if r.userticket_id < 0:
                 self._integrity_exit("Reservation", i,
                     f"userticket_id는 0 이상이어야 함: {r.userticket_id}", line)
+            elif r.userticket_id > 0 and r.userticket_id not in valid_userticket_ids:
+                self._integrity_exit("Reservation", i,
+                    f"존재하지 않는 대기 이용권(userticket_id)을 참조하고 있음: {r.userticket_id}", line)
 
             # status 유효성
             if r.status not in (0, 1, 2):
