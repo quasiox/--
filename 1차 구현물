@@ -2697,6 +2697,8 @@ class StudyCafe:
 
         print(f"... {cur_seat.id}번 → {new_seat.id}번 좌석으로 이동하였습니다.")
 
+        self._process_seat_available(cur_seat.id, now)
+
     def cmd_pause(self, args: list[str]):
         if args:
             print(".!! 오류: 인자가 없어야 합니다.")
