@@ -1927,7 +1927,10 @@ class StudyCafe:
                 continue
             seat = self.seats[seat_num - 1]
             if not seat.is_empty():
-                print(f".!! 오류: {seat_num}번 좌석은 이미 사용 중입니다.")
+                if seat.disabled:
+                    print(f".!! 오류: {seat_num}번 좌석은 사용불가 좌석입니다.")
+                else:
+                    print(f".!! 오류: {seat_num}번 좌석은 이미 사용 중입니다.")
                 continue
             break
 
@@ -2274,6 +2277,10 @@ class StudyCafe:
                 break
             else:
                 print(".!! 오류: 유효하지 않은 선택입니다.")
+            now = self.get_now()
+            for seat in self.seats:
+                if seat.is_empty():
+                    self._process_seat_available(seat.id, now)
 
     def _seat_add_row(self):
         """맨 뒤에 열(cols)개 좌석 추가"""
@@ -2304,17 +2311,34 @@ class StudyCafe:
         """각 행 맨 끝에 좌석 1개씩 추가 (열 추가)"""
         new_seats = []
         sid = 1
+        id_map = {}  # ▼ 추가: 기존 번호 -> 새 번호 매핑
+        
         for r in range(self.rows):
             for c in range(self.cols):
-                new_seats.append(self.seats[r * self.cols + c])
-                new_seats[-1].id = sid
+                seat = self.seats[r * self.cols + c]
+                id_map[seat.id] = sid  # 매핑 저장
+                seat.id = sid
+                new_seats.append(seat)
                 sid += 1
             new_seats.append(Seat(sid))
             sid += 1
+            
         self.seats = new_seats
         self.cols += 1
         self.total_seats = self.rows * self.cols
         self._save_seats()
+
+        # ▼ 추가: 세션과 예약 데이터의 좌석 번호 일괄 업데이트
+        for s in self.sessions:
+            if not s.is_shutdown_record() and s.seat_id in id_map:
+                s.seat_id = id_map[s.seat_id]
+        self._save_sessions()
+
+        for res in self.reservations:
+            if res.seat_id in id_map:
+                res.seat_id = id_map[res.seat_id]
+        self._save_reservations()
+
         print(f"... 열 추가 완료 → {self.rows}행 × {self.cols}열 (총 {self.total_seats}석)")
 
     def _seat_del_col(self):
@@ -2327,19 +2351,72 @@ class StudyCafe:
         if occupied:
             print(f".!! 오류: 마지막 열에 이용 중인 좌석이 있습니다: {[s.id for s in occupied]}")
             return
+            
         new_seats = []
         sid = 1
+        id_map = {}  # ▼ 추가: 기존 번호 -> 새 번호 매핑
+        
         for r in range(self.rows):
             for c in range(self.cols - 1):
                 seat = self.seats[r * self.cols + c]
+                id_map[seat.id] = sid
                 seat.id = sid
                 new_seats.append(seat)
                 sid += 1
+                
         self.seats = new_seats
         self.cols -= 1
         self.total_seats = self.rows * self.cols
         self._save_seats()
+
+        # ▼ 추가: 세션과 예약 데이터 업데이트
+        for s in self.sessions:
+            if not s.is_shutdown_record():
+                if s.seat_id in id_map:
+                    s.seat_id = id_map[s.seat_id]
+                else:
+                    # 삭제된 열의 과거 세션인 경우 가장 마지막 좌석 번호로 편입 (무결성 통과용)
+                    s.seat_id = self.total_seats 
+        self._save_sessions()
+
+        for res in self.reservations:
+            if res.seat_id in id_map:
+                res.seat_id = id_map[res.seat_id]
+            elif res.seat_id != 0:
+                # 삭제된 열에 걸려있던 예약은 '아무자리나(0)' 대기로 변경
+                res.seat_id = 0 
+        self._save_reservations()
+
         print(f"... 열 삭제 완료 → {self.rows}행 × {self.cols}열 (총 {self.total_seats}석)")
+
+    def _seat_del_row(self):
+        """맨 뒤 행(cols개 좌석) 삭제. 이용 중이면 거부."""
+        if self.rows <= 1:
+            print(".!! 오류: 행이 1개뿐이라 삭제할 수 없습니다.")
+            return
+        last_row = self.seats[-self.cols:]
+        occupied = [s for s in last_row if s.user_id]
+        if occupied:
+            print(f".!! 오류: 마지막 행에 이용 중인 좌석이 있습니다: {[s.id for s in occupied]}")
+            return
+            
+        self.seats = self.seats[:-self.cols]
+        self.rows -= 1
+        self.total_seats = self.rows * self.cols
+        self._save_seats()
+
+        # ▼ 추가: 삭제된 행의 과거 세션/예약 기록 보정
+        for s in self.sessions:
+            if not s.is_shutdown_record() and s.seat_id > self.total_seats:
+                s.seat_id = self.total_seats
+        self._save_sessions()
+
+        for res in self.reservations:
+            if res.seat_id > self.total_seats:
+                res.seat_id = 0
+        self._save_reservations()
+
+        print(f"... 행 삭제 완료 → {self.rows}행 × {self.cols}열 (총 {self.total_seats}석)")
 
     def _seat_set_disabled(self, disable: bool):
         """특정 좌석을 사용 불가/가능으로 전환"""
