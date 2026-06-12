@@ -2317,22 +2317,6 @@ class StudyCafe:
         self._save_seats()
         print(f"... 행 추가 완료 → {self.rows}행 × {self.cols}열 (총 {self.total_seats}석)")
 
-    def _seat_del_row(self):
-        """맨 뒤 행(cols개 좌석) 삭제. 이용 중이면 거부."""
-        if self.rows <= 1:
-            print(".!! 오류: 행이 1개뿐이라 삭제할 수 없습니다.")
-            return
-        last_row = self.seats[-self.cols:]
-        occupied = [s for s in last_row if s.user_id]
-        if occupied:
-            print(f".!! 오류: 마지막 행에 이용 중인 좌석이 있습니다: {[s.id for s in occupied]}")
-            return
-        self.seats = self.seats[:-self.cols]
-        self.rows -= 1
-        self.total_seats = self.rows * self.cols
-        self._save_seats()
-        print(f"... 행 삭제 완료 → {self.rows}행 × {self.cols}열 (총 {self.total_seats}석)")
-
     def _seat_add_col(self):
         """각 행 맨 끝에 좌석 1개씩 추가 (열 추가)"""
         new_seats = []
