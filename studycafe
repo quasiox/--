@@ -1416,7 +1416,7 @@ class StudyCafe:
                 for s in reversed(self.sessions):
                     if s.user_id == user.id and s.exit_time is None:
                         s.exit_time = expired_time
-                        s.usage_min += math.floor((expired_time - s.enter_time).total_seconds() / 60)
+                        s.usage_min = math.floor((expired_time - s.enter_time).total_seconds() / 60)
                         break
 
                 if self._activate_next_ticket(user, activation_time=expired_time):
@@ -1779,25 +1779,7 @@ class StudyCafe:
         if args:
             print(".!! 오류: 인자가 없어야 합니다.")
             return
-
         now = self.get_now()
-        if self.current_user:
-            user = self.current_user
-            ticket = self._find_ticket(user.ticket_id)
-            if ticket and user.is_entered(self.sessions):
-                if ticket.type == 1:  # 정기권
-                    deduction = self._calc_deduction(user, ticket, now)
-                    user.remain = max(0, user.remain - deduction)
-                elif ticket.type == 2:  # 시간권
-                    deduction = self._calc_deduction(user, ticket, now)
-                    user.remain = max(0, user.remain - deduction)
-                    user.start_time = now
-                    if user.is_away():
-                        user.away_start = now
-        for s in self.sessions:
-            if s.exit_time is None and not s.is_shutdown_record():
-                s.usage_min = math.floor((now - s.enter_time).total_seconds() / 60)
-        
         self._write_shutdown_record(now)
         self.save_all()
         print("(프로그램 종료)")
@@ -2260,9 +2242,18 @@ class StudyCafe:
             return
 
         now = self.get_now()
-        seat = self._find_seat_by_user(uid)
+        seat = self._find_seat_by_user(user)
         seat_num = seat.id if seat else "?"
-        self._do_exit(user, now)
+        ticket = self._find_ticket(user.ticket_id)
+        if ticket and ticket.type == 2:
+            cur_seat = self._find_seat_by_user(user.id)
+            cur_seat.user_id = ""
+            user.ticket_id = 0
+            user.remain = 0
+            user.start_time = None
+            user.away_start = None
+        else:
+            self._do_exit(user, now)
         self.save_all()
         print(f"... '{uid}'을(를) {seat_num}번 좌석에서 강제 퇴장하였습니다.")
         if isinstance(seat_num, int):
