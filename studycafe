@@ -1429,10 +1429,6 @@ class StudyCafe:
                     self._save_userticket()
                     return False
 
-                user.ticket_id  = 0
-                user.remain     = 0
-                user.start_time = None
-                user.away_start = None
                 seat = self._find_seat_by_user(user.id)
                 if seat:
                     seat.user_id = ""
@@ -1582,17 +1578,12 @@ class StudyCafe:
 
     def _activate_next_ticket(self, user: User,
                                activation_time: datetime = None) -> bool:
-        cur_seat = self._find_seat_by_user(user.id)
-        if cur_seat:
-            is_extension_reserved = any(
-                r for r in self.reservations 
-                if r.seat_id == cur_seat.id and r.status == 0
-            )
-        if is_extension_reserved:
-            print("현재 좌석에 예약이 설정되어 있어 자동활성화가 불가합니다.")
-            return False
         candidates = [e for e in self._sorted_queue(user) if not e.is_reserved]
         if not candidates:
+            user.ticket_id  = 0
+            user.remain     = 0
+            user.start_time = None
+            user.away_start = None
             return False
 
         if activation_time is None:
@@ -1608,6 +1599,19 @@ class StudyCafe:
         self.userticket_entries = [
             e for e in self.userticket_entries
             if e.userticket_id != next_entry.userticket_id]
+        
+        cur_seat = self._find_seat_by_user(user.id)
+        is_extension_reserved = False
+
+        if cur_seat:
+            is_extension_reserved = any(
+                r for r in self.reservations 
+                if r.seat_id in (cur_seat.id, 0) and r.status == 0 and r.user_id != user.id
+            )
+        if is_extension_reserved:
+            print("현재 좌석에 예약이 설정되어 있어 자동활성화가 불가합니다.")
+            user.start_time = None
+            return False
 
         seat = self._find_seat_by_user(user.id)
         if seat:
