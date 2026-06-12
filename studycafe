@@ -2242,18 +2242,14 @@ class StudyCafe:
             return
 
         now = self.get_now()
-        seat = self._find_seat_by_user(user)
+        seat = self._find_seat_by_user(user.id)
         seat_num = seat.id if seat else "?"
         ticket = self._find_ticket(user.ticket_id)
+        self._do_exit(user, now)
         if ticket and ticket.type == 2:
-            cur_seat = self._find_seat_by_user(user.id)
-            cur_seat.user_id = ""
             user.ticket_id = 0
             user.remain = 0
-            user.start_time = None
-            user.away_start = None
-        else:
-            self._do_exit(user, now)
+            print(f"    ※ 안내: 시간권(Type 2) 강제 퇴장으로 남은 이용권 시간이 모두 소멸되었습니다.")
         self.save_all()
         print(f"... '{uid}'을(를) {seat_num}번 좌석에서 강제 퇴장하였습니다.")
         if isinstance(seat_num, int):
